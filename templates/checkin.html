@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Check In{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-camera me-2"></i>Check In Process</h5>
+            </div>
+            <div class="card-body p-4">
+                <div id="step1" class="step-container">
+                    <div class="text-center mb-4">
+                        <h4>Step 1: Front Camera</h4>
+                        <p class="text-muted">Please allow camera access and position yourself in front of the camera</p>
+                    </div>
+                    
+                    <div class="text-center mb-3">
+                        <video id="frontVideo" width="100%" height="auto" autoplay style="max-width: 500px; border-radius: 10px; border: 3px solid #28a745;"></video>
+                        <canvas id="frontCanvas" style="display: none;"></canvas>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button id="captureFrontBtn" class="btn btn-success btn-lg">
+                            <i class="fas fa-camera me-2"></i>Capture Front Photo
+                        </button>
+                    </div>
+                </div>
+
+                <div id="step2" class="step-container" style="display: none;">
+                    <div class="text-center mb-4">
+                        <h4>Step 2: Rear Camera</h4>
+                        <p class="text-muted">Now switch to rear camera to capture your surroundings</p>
+                    </div>
+                    
+                    <div class="text-center mb-3">
+                        <video id="rearVideo" width="100%" height="auto" autoplay style="max-width: 500px; border-radius: 10px; border: 3px solid #007bff;"></video>
+                        <canvas id="rearCanvas" style="display: none;"></canvas>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button id="captureRearBtn" class="btn btn-primary btn-lg">
+                            <i class="fas fa-camera me-2"></i>Capture Rear Photo
+                        </button>
+                    </div>
+                </div>
+
+                <div id="step3" class="step-container" style="display: none;">
+                    <div class="text-center mb-4">
+                        <h4>Step 3: Getting Location...</h4>
+                        <p class="text-muted">Please wait while we capture your location</p>
+                        <div class="spinner-border text-primary mt-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <div id="locationFallback" style="display: none;" class="mt-4">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Automatic location detection failed
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Enter your city manually:</label>
+                                <input type="text" id="manualCity" class="form-control" placeholder="e.g., Chennai, Mumbai, Delhi">
+                            </div>
+                            <button id="submitManualBtn" class="btn btn-primary">
+                                <i class="fas fa-check me-2"></i>Continue with Manual Location
+                            </button>
+                            <button id="retryLocationBtn" class="btn btn-outline-secondary ms-2">
+                                <i class="fas fa-redo me-2"></i>Retry Auto-detect
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="step4" class="step-container" style="display: none;">
+                    <div class="text-center">
+                        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                        <h4>Check-In Successful!</h4>
+                        <p class="text-muted">Your attendance has been recorded</p>
+                        <a href="{{ url_for('user_dashboard') }}" class="btn btn-success mt-3">
+                            <i class="fas fa-home me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let frontStream, rearStream;
+let frontImageData, rearImageData;
+let locationData = {};
+
+// Step 1: Front Camera
+async function startFrontCamera() {
+    try {
+        frontStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user' } 
+        });
+        document.getElementById('frontVideo').srcObject = frontStream;
+    } catch (error) {
+        showError('Camera access denied. Please allow camera permissions.');
+    }
+}
+
+document.getElementById('captureFrontBtn').addEventListener('click', function() {
+    const video = document.getElementById('frontVideo');
+    const canvas = document.getElementById('frontCanvas');
+    const context = canvas.getContext('2d');
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    
+    frontImageData = canvas.toDataURL('image/jpeg');
+    
+    // Stop front camera
+    frontStream.getTracks().forEach(track => track.stop());
+    
+    // Move to step 2
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    startRearCamera();
+});
+
+// Step 2: Rear Camera
+async function startRearCamera() {
+    try {
+        rearStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' } 
+        });
+        document.getElementById('rearVideo').srcObject = rearStream;
+    } catch (error) {
+        // If rear camera not available, use front camera again
+        try {
+            rearStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user' } 
+            });
+            document.getElementById('rearVideo').srcObject = rearStream;
+        } catch (err) {
+            showError('Camera access failed. Please check permissions.');
+        }
+    }
+}
+
+document.getElementById('captureRearBtn').addEventListener('click', function() {
+    const video = document.getElementById('rearVideo');
+    const canvas = document.getElementById('rearCanvas');
+    const context = canvas.getContext('2d');
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    
+    rearImageData = canvas.toDataURL('image/jpeg');
+    
+    // Stop rear camera
+    rearStream.getTracks().forEach(track => track.stop());
+    
+    // Move to step 3
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'block';
+    getLocation();
+});
+
+// Step 3: Get Location
+function getLocation() {
+    if (!navigator.geolocation) {
+        showLocationFallback('Geolocation is not supported by your browser');
+        return;
+    }
+    
+    const options = {
+        enableHighAccuracy: false, // Changed to false for faster response
+        timeout: 8000, // 8 seconds
+        maximumAge: 60000 // Accept cached location from last minute
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        async function(position) {
+            locationData.latitude = position.coords.latitude;
+            locationData.longitude = position.coords.longitude;
+            
+            console.log('✓ Location captured:', locationData.latitude, locationData.longitude);
+            console.log('Accuracy:', position.coords.accuracy, 'meters');
+            
+            // Get city name from coordinates
+            await getCityName();
+            
+            // Submit check-in
+            submitCheckin();
+        },
+        function(error) {
+            console.error('Geolocation error:', error.code, error.message);
+            
+            let errorMsg = 'Location access failed';
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg = 'Location permission was denied. Please allow location access.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg = 'Location information is unavailable. Please try again or enter manually.';
+                    break;
+                case error.TIMEOUT:
+                    errorMsg = 'Location request timed out. Please try again or enter manually.';
+                    break;
+            }
+            
+            showLocationFallback(errorMsg);
+        },
+        options
+    );
+}
+
+async function getCityName() {
+    // IMPORTANT: Use ONLY coordinates-based geocoding (not IP location)
+    // IP location gives your ISP location (Salem), not your actual GPS location
+    
+    try {
+        // Try BigDataCloud first - more detailed info
+        const bdcResponse = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${locationData.latitude}&longitude=${locationData.longitude}&localityLanguage=en`
+        );
+        
+        if (bdcResponse.ok) {
+            const bdcData = await bdcResponse.json();
+            // Get detailed location info
+            const locality = bdcData.locality || '';
+            const city = bdcData.city || '';
+            const principalSubdivision = bdcData.principalSubdivision || '';
+            
+            // Build detailed address
+            locationData.city = locality || city || principalSubdivision || 'Location captured';
+            locationData.full_address = bdcData.localityInfo?.administrative?.map(a => a.name).join(', ') || locationData.city;
+            
+            console.log('✓ Location from coordinates:', locationData.city);
+            console.log('Full address:', locationData.full_address);
+            return;
+        }
+    } catch (error) {
+        console.log('BigDataCloud failed, trying OpenStreetMap...');
+    }
+    
+    // Fallback to OpenStreetMap
+    try {
+        const osmResponse = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${locationData.latitude}&lon=${locationData.longitude}&format=json`,
+            {
+                headers: {
+                    'User-Agent': 'AttendanceSystem/1.0'
+                }
+            }
+        );
+        
+        if (osmResponse.ok) {
+            const osmData = await osmResponse.json();
+            // Get most specific location available
+            locationData.city = osmData.address.suburb 
+                || osmData.address.neighbourhood
+                || osmData.address.city 
+                || osmData.address.town 
+                || osmData.address.village 
+                || osmData.address.state
+                || 'Location captured';
+            locationData.full_address = osmData.display_name || locationData.city;
+            
+            console.log('✓ Location from OSM:', locationData.city);
+            console.log('Full address:', locationData.full_address);
+            return;
+        }
+    } catch (error) {
+        console.log('OpenStreetMap failed:', error);
+    }
+    
+    // Final fallback
+    locationData.city = 'Location captured (coordinates only)';
+    locationData.full_address = `Lat: ${locationData.latitude}, Lon: ${locationData.longitude}`;
+}
+
+function showLocationFallback(message) {
+    document.querySelector('#step3 .spinner-border').style.display = 'none';
+    document.querySelector('#step3 p.text-muted').textContent = message;
+    document.getElementById('locationFallback').style.display = 'block';
+}
+
+// Manual location submission
+document.getElementById('submitManualBtn')?.addEventListener('click', function() {
+    const manualCity = document.getElementById('manualCity').value.trim();
+    
+    if (!manualCity) {
+        alert('Please enter a city name');
+        return;
+    }
+    
+    locationData.latitude = 0;
+    locationData.longitude = 0;
+    locationData.city = manualCity + ' (Manual entry)';
+    
+    submitCheckin();
+});
+
+// Retry location
+document.getElementById('retryLocationBtn')?.addEventListener('click', function() {
+    document.getElementById('locationFallback').style.display = 'none';
+    document.querySelector('#step3 .spinner-border').style.display = 'block';
+    document.querySelector('#step3 p.text-muted').textContent = 'Please wait while we capture your location';
+    getLocation();
+});
+
+// Step 4: Submit Check-in
+async function submitCheckin() {
+    try {
+        const response = await fetch('/api/checkin', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                front_image: frontImageData,
+                rear_image: rearImageData,
+                latitude: locationData.latitude,
+                longitude: locationData.longitude,
+                city: locationData.city,
+                full_address: locationData.full_address || locationData.city
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('step3').style.display = 'none';
+            document.getElementById('step4').style.display = 'block';
+        } else {
+            showError('Check-in failed. Please try again.');
+        }
+    } catch (error) {
+        showError('Network error. Please check your connection.');
+    }
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+}
+
+// Start the process
+startFrontCamera();
+</script>
+{% endblock %}

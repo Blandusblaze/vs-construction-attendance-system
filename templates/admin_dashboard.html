@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="text-white mb-4"><i class="fas fa-tachometer-alt me-2"></i>Admin Dashboard</h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Add New User</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_user') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" name="role">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add User
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>All Users</h5>
+            </div>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>
+                                {% if user.role == 'admin' %}
+                                <span class="badge bg-danger">Admin</span>
+                                {% else %}
+                                <span class="badge bg-primary">User</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Recent Attendance Records</h5>
+            </div>
+            <div class="card-body" style="overflow-x: auto;">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Check In</th>
+                            <th>Check Out</th>
+                            <th>Coordinates</th>
+                            <th>Location</th>
+                            <th>Images</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in attendance %}
+                        <tr>
+                            <td>{{ record.username }}</td>
+                            <td>{{ record.check_in_time }}</td>
+                            <td>{{ record.check_out_time or 'N/A' }}</td>
+                            <td>
+                                {% if record.latitude and record.longitude and record.latitude != 0 %}
+                                <a href="https://www.google.com/maps?q={{ record.latitude }},{{ record.longitude }}" target="_blank" class="text-decoration-none">
+                                    <i class="fas fa-map-marker-alt text-danger"></i>
+                                    {{ "%.4f"|format(record.latitude) }}, {{ "%.4f"|format(record.longitude) }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">Not captured</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.full_address %}
+                                <small class="text-muted" style="max-width: 300px; display: inline-block;">
+                                    {{ record.full_address }}
+                                </small>
+                                {% elif record.city and record.city != 'Unknown' and record.city != 'Not captured' %}
+                                <span class="badge bg-info">{{ record.city }}</span>
+                                {% else %}
+                                <span class="text-muted">{{ record.city or 'Not captured' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.front_image_path %}
+                                <a href="{{ url_for('static', filename='uploads/' + record.front_image_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-camera"></i> Front
+                                </a>
+                                {% endif %}
+                                {% if record.rear_image_path %}
+                                <a href="{{ url_for('static', filename='uploads/' + record.rear_image_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-camera"></i> Rear
+                                </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.status == 'checked_in' %}
+                                <span class="badge bg-success">Checked In</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Checked Out</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

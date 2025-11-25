@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="VS Construction" style="max-width: 120px; margin-bottom: 20px;">
+                    <h3 class="fw-bold">VS Construction</h3>
+                    <p class="text-muted">Attendance Management System</p>
+                    <p class="text-muted small fst-italic">"You Dream It, We Build It!"</p>
+                </div>
+                
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            <input type="text" class="form-control" id="username" name="username" required autofocus>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="password" class="form-label">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 py-2">
+                        <i class="fas fa-sign-in-alt me-2"></i>Login
+                    </button>
+                </form>
+                
+                <div class="mt-4 p-3 bg-light rounded">
+                    <small class="text-muted">
+                        <strong>Demo Credentials:</strong><br>
+                        Admin: admin / admin123
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

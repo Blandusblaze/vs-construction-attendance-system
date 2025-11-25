@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}User Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="text-white mb-4"><i class="fas fa-home me-2"></i>My Dashboard</h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card text-center">
+            <div class="card-body p-4">
+                <i class="fas fa-sign-in-alt fa-3x text-success mb-3"></i>
+                <h5>Check In</h5>
+                {% if current_checkin %}
+                <p class="text-success">Currently Checked In</p>
+                <small class="text-muted">Since: {{ current_checkin.check_in_time }}</small>
+                {% else %}
+                <p class="text-muted">Start your work day</p>
+                <a href="{{ url_for('checkin_page') }}" class="btn btn-success btn-lg mt-2">
+                    <i class="fas fa-camera me-2"></i>Check In Now
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-3">
+        <div class="card text-center">
+            <div class="card-body p-4">
+                <i class="fas fa-sign-out-alt fa-3x text-danger mb-3"></i>
+                <h5>Check Out</h5>
+                {% if current_checkin %}
+                <p class="text-muted">End your work day</p>
+                <button id="checkoutBtn" class="btn btn-danger btn-lg mt-2">
+                    <i class="fas fa-door-open me-2"></i>Check Out Now
+                </button>
+                {% else %}
+                <p class="text-muted">Not checked in yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>My Attendance History</h5>
+            </div>
+            <div class="card-body" style="overflow-x: auto;">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Check In</th>
+                            <th>Check Out</th>
+                            <th>Duration</th>
+                            <th>Coordinates</th>
+                            <th>Location</th>
+                            <th>Images</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in attendance %}
+                        <tr>
+                            <td>{{ record.check_in_time }}</td>
+                            <td>{{ record.check_out_time or 'N/A' }}</td>
+                            <td>
+                                {% if record.check_out_time %}
+                                <!-- Duration calculation would go here -->
+                                Completed
+                                {% else %}
+                                Ongoing
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.latitude and record.longitude %}
+                                <a href="https://www.google.com/maps?q={{ record.latitude }},{{ record.longitude }}" target="_blank">
+                                    View Map
+                                </a>
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ record.city or 'N/A' }}</td>
+                            <td>
+                                {% if record.front_image_path %}
+                                <a href="{{ url_for('static', filename='uploads/' + record.front_image_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-camera"></i>
+                                </a>
+                                {% endif %}
+                                {% if record.rear_image_path %}
+                                <a href="{{ url_for('static', filename='uploads/' + record.rear_image_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-camera"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.status == 'checked_in' %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Completed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('checkoutBtn')?.addEventListener('click', async function() {
+    if (!confirm('Are you sure you want to check out?')) return;
+    
+    try {
+        const response = await fetch('/api/checkout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Checkout failed. Please try again.');
+        }
+    } catch (error) {
+        alert('Error during checkout: ' + error.message);
+    }
+});
+</script>
+{% endblock %}
