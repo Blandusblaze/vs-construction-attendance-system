@@ -27,10 +27,7 @@ wheels/
 instance/
 .webassets-cache
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+
 
 # Uploads (images will be regenerated)
 static/uploads/*
