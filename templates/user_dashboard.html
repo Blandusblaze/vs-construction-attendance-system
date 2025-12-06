@@ -35,9 +35,9 @@
                 <h5>Check Out</h5>
                 {% if current_checkin %}
                 <p class="text-muted">End your work day</p>
-                <button id="checkoutBtn" class="btn btn-danger btn-lg mt-2">
-                    <i class="fas fa-door-open me-2"></i>Check Out Now
-                </button>
+                <a href="{{ url_for('checkout_page') }}" class="btn btn-danger btn-lg mt-2">
+                    <i class="fas fa-camera me-2"></i>Check Out Now
+                </a>
                 {% else %}
                 <p class="text-muted">Not checked in yet</p>
                 {% endif %}
@@ -118,28 +118,4 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.getElementById('checkoutBtn')?.addEventListener('click', async function() {
-    if (!confirm('Are you sure you want to check out?')) return;
-    
-    try {
-        const response = await fetch('/api/checkout', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            alert(data.message);
-            location.reload();
-        } else {
-            alert('Checkout failed. Please try again.');
-        }
-    } catch (error) {
-        alert('Error during checkout: ' + error.message);
-    }
-});
-</script>
 {% endblock %}

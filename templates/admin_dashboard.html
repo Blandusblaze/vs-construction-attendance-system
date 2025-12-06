@@ -5,7 +5,22 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h2 class="text-white mb-4"><i class="fas fa-tachometer-alt me-2"></i>Admin Dashboard</h2>
+        <h2 class="text-white mb-4">
+            <i class="fas fa-tachometer-alt me-2"></i>Admin Dashboard
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('export_report') }}" class="btn btn-success">
+                <i class="fas fa-file-excel me-2"></i>Export to Excel
+            </a>
+            <button type="button" class="btn btn-danger" onclick="confirmDeleteAll()">
+                <i class="fas fa-trash-alt me-2"></i>Delete All Records
+            </button>
+        </div>
     </div>
 </div>
 
@@ -92,9 +107,11 @@
                             <th>User</th>
                             <th>Check In</th>
                             <th>Check Out</th>
-                            <th>Coordinates</th>
-                            <th>Location</th>
-                            <th>Images</th>
+                            <th>Duration</th>
+                            <th>Check-in Location</th>
+                            <th>Check-out Location</th>
+                            <th>Check-in Images</th>
+                            <th>Check-out Images</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -105,10 +122,19 @@
                             <td>{{ record.check_in_time }}</td>
                             <td>{{ record.check_out_time or 'N/A' }}</td>
                             <td>
-                                {% if record.latitude and record.longitude and record.latitude != 0 %}
-                                <a href="https://www.google.com/maps?q={{ record.latitude }},{{ record.longitude }}" target="_blank" class="text-decoration-none">
-                                    <i class="fas fa-map-marker-alt text-danger"></i>
-                                    {{ "%.4f"|format(record.latitude) }}, {{ "%.4f"|format(record.longitude) }}
+                                {% if record.check_out_time %}
+                                {% set checkin = record.check_in_time %}
+                                {% set checkout = record.check_out_time %}
+                                <span class="badge bg-info">Completed</span>
+                                {% else %}
+                                <span class="badge bg-warning">Ongoing</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.checkin_latitude and record.checkin_longitude and record.checkin_latitude != 0 %}
+                                <a href="https://www.google.com/maps?q={{ record.checkin_latitude }},{{ record.checkin_longitude }}" target="_blank" class="text-decoration-none">
+                                    <i class="fas fa-map-marker-alt text-success"></i>
+                                    {{ "%.4f, %.4f"|format(record.checkin_latitude, record.checkin_longitude) }}
                                 </a>
                                 {% else %}
                                 <span class="text-muted">Not captured</span>
@@ -116,24 +142,48 @@
                             </td>
                             <td>
                                 {% if record.full_address %}
-                                <small class="text-muted" style="max-width: 300px; display: inline-block;">
-                                    {{ record.full_address }}
-                                </small>
-                                {% elif record.city and record.city != 'Unknown' and record.city != 'Not captured' %}
+                                <small>{{ record.full_address }}</small>
+                                {% elif record.city %}
                                 <span class="badge bg-info">{{ record.city }}</span>
                                 {% else %}
-                                <span class="text-muted">{{ record.city or 'Not captured' }}</span>
+                                <span class="text-muted">Not captured</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.checkout_latitude and record.checkout_longitude and record.checkout_latitude != 0 %}
+                                <a href="https://www.google.com/maps?q={{ record.checkout_latitude }},{{ record.checkout_longitude }}" target="_blank" class="text-decoration-none">
+                                    <i class="fas fa-map-marker-alt text-danger"></i>
+                                    {{ record.checkout_city or 'View Map' }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">{{ record.checkout_city or 'Not captured' }}</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if record.front_image_path %}
-                                <a href="{{ url_for('static', filename='uploads/' + record.front_image_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-camera"></i> Front
+                                <a href="{{ url_for('static', filename='uploads/' + record.front_image_path) }}" target="_blank">
+                                    <img src="{{ url_for('static', filename='uploads/thumb_' + record.front_image_path) }}" 
+                                         alt="Front" class="img-thumbnail" style="max-width: 50px; cursor: pointer;">
                                 </a>
                                 {% endif %}
                                 {% if record.rear_image_path %}
-                                <a href="{{ url_for('static', filename='uploads/' + record.rear_image_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                                    <i class="fas fa-camera"></i> Rear
+                                <a href="{{ url_for('static', filename='uploads/' + record.rear_image_path) }}" target="_blank">
+                                    <img src="{{ url_for('static', filename='uploads/thumb_' + record.rear_image_path) }}" 
+                                         alt="Rear" class="img-thumbnail" style="max-width: 50px; cursor: pointer;">
+                                </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if record.checkout_front_image_path %}
+                                <a href="{{ url_for('static', filename='uploads/' + record.checkout_front_image_path) }}" target="_blank">
+                                    <img src="{{ url_for('static', filename='uploads/thumb_' + record.checkout_front_image_path) }}" 
+                                         alt="Checkout Front" class="img-thumbnail" style="max-width: 50px; cursor: pointer;">
+                                </a>
+                                {% endif %}
+                                {% if record.checkout_rear_image_path %}
+                                <a href="{{ url_for('static', filename='uploads/' + record.checkout_rear_image_path) }}" target="_blank">
+                                    <img src="{{ url_for('static', filename='uploads/thumb_' + record.checkout_rear_image_path) }}" 
+                                         alt="Checkout Rear" class="img-thumbnail" style="max-width: 50px; cursor: pointer;">
                                 </a>
                                 {% endif %}
                             </td>
@@ -152,4 +202,18 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden form for delete all -->
+<form id="deleteAllForm" method="POST" action="{{ url_for('delete_all_records') }}" style="display: none;">
+</form>
+
+<script>
+function confirmDeleteAll() {
+    if (confirm('⚠️ WARNING: This will permanently delete ALL attendance records and images. This action cannot be undone!\n\nAre you absolutely sure?')) {
+        if (confirm('Final confirmation: Delete all records?')) {
+            document.getElementById('deleteAllForm').submit();
+        }
+    }
+}
+</script>
 {% endblock %}

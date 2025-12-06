@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Debug Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">🔍 Location Debug Test - Avadi Detection</h4>
+            </div>
+            <div class="card-body">
+                <button id="testBtn" class="btn btn-primary btn-lg">Test My Location Now</button>
+                <div id="results" class="mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async function() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="spinner-border text-primary"></div><p>Getting location...</p>';
+
+            if (!navigator.geolocation) {
+                resultsDiv.innerHTML = '<div class="alert alert-danger">Geolocation not supported</div>';
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async function(position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    
+                    let html = `
+                        <div class="alert alert-success">
+                            <h5>✅ GPS Location Captured!</h5>
+                            <p><strong>Latitude:</strong> ${lat}</p>
+                            <p><strong>Longitude:</strong> ${lon}</p>
+                            <p><strong>Accuracy:</strong> ${position.coords.accuracy} meters</p>
+                            <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" class="btn btn-sm btn-primary">📍 View on Google Maps</a>
+                        </div>
+                    `;
+
+                    // Test OpenStreetMap (Primary for Avadi)
+                    try {
+                        const osmResponse = await fetch(
+                            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`,
+                            { headers: { 'User-Agent': 'AttendanceSystem/1.0' } }
+                        );
+                        
+                        if (osmResponse.ok) {
+                            const osmData = await osmResponse.json();
+                            const addr = osmData.address;
+                            
+                            html += `
+                                <div class="alert alert-info">
+                                    <h6>🗺️ OpenStreetMap Result:</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Road:</strong></td><td>${addr.road || 'N/A'}</td></tr>
+                                        <tr><td><strong>Neighbourhood:</strong></td><td>${addr.neighbourhood || 'N/A'}</td></tr>
+                                        <tr><td><strong>Suburb:</strong></td><td>${addr.suburb || 'N/A'}</td></tr>
+                                        <tr><td><strong>Quarter:</strong></td><td>${addr.quarter || 'N/A'}</td></tr>
+                                        <tr><td><strong>Village:</strong></td><td>${addr.village || 'N/A'}</td></tr>
+                                        <tr><td><strong>Town:</strong></td><td>${addr.town || 'N/A'}</td></tr>
+                                        <tr><td><strong>City:</strong></td><td>${addr.city || 'N/A'}</td></tr>
+                                        <tr><td><strong>Municipality:</strong></td><td>${addr.municipality || 'N/A'}</td></tr>
+                                        <tr><td><strong>State District:</strong></td><td>${addr.state_district || 'N/A'}</td></tr>
+                                        <tr><td><strong>State:</strong></td><td>${addr.state || 'N/A'}</td></tr>
+                                        <tr><td><strong>Country:</strong></td><td>${addr.country || 'N/A'}</td></tr>
+                                    </table>
+                                    <p><strong>📍 What will be saved:</strong></p>
+                                    <div class="alert alert-warning">
+                                        <strong>City:</strong> ${addr.neighbourhood || addr.suburb || addr.quarter || addr.hamlet || addr.village || addr.town || addr.city || addr.state_district || 'N/A'}<br>
+                                        <strong>Full Address:</strong> ${osmData.display_name}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            html += `<div class="alert alert-warning">OpenStreetMap: ${osmResponse.status} - ${osmResponse.statusText}</div>`;
+                        }
+                    } catch (error) {
+                        html += `<div class="alert alert-warning">OpenStreetMap Error: ${error.message}</div>`;
+                    }
+
+                    // Test BigDataCloud (Fallback)
+                    try {
+                        const bdcResponse = await fetch(
+                            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+                        );
+                        
+                        if (bdcResponse.ok) {
+                            const bdcData = await bdcResponse.json();
+                            html += `
+                                <div class="alert alert-success">
+                                    <h6>🌐 BigDataCloud Result:</h6>
+                                    <p><strong>Locality:</strong> ${bdcData.locality || 'N/A'}</p>
+                                    <p><strong>City:</strong> ${bdcData.city || 'N/A'}</p>
+                                    <p><strong>Principal Subdivision:</strong> ${bdcData.principalSubdivision || 'N/A'}</p>
+                                    <p><strong>Country:</strong> ${bdcData.countryName || 'N/A'}</p>
+                                    <hr>
+                                    <p><strong>📍 What will be saved:</strong></p>
+                                    <div class="alert alert-warning">
+                                        <strong>City:</strong> ${bdcData.locality || bdcData.city || bdcData.principalSubdivision || 'N/A'}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            html += `<div class="alert alert-warning">BigDataCloud: ${bdcResponse.status} - ${bdcResponse.statusText}</div>`;
+                        }
+                    } catch (error) {
+                        html += `<div class="alert alert-warning">BigDataCloud Error: ${error.message}</div>`;
+                    }
+
+                    // Show final decision
+                    html += `
+                        <div class="alert alert-primary">
+                            <h5>🎯 Expected Result in Attendance System:</h5>
+                            <p>If you're in <strong>Avadi</strong>, you should see one of these in the results above.</p>
+                            <p>If you see "<strong>Vellore</strong>" in any of the results above, that means your GPS location is actually pointing to Vellore area, or the geocoding APIs are returning broader district-level data.</p>
+                        </div>
+                    `;
+
+                    resultsDiv.innerHTML = html;
+                },
+                function(error) {
+                    let errorMsg = '';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg = 'User denied location permission';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg = 'Location request timed out';
+                            break;
+                    }
+                    resultsDiv.innerHTML = `<div class="alert alert-danger">Error: ${errorMsg}<br>Code: ${error.code}<br>Message: ${error.message}</div>`;
+                },
+                { 
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0 
+                }
+            );
+        });
+    </script>
+</body>
+</html>
