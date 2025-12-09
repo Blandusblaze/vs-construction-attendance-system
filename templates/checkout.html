@@ -11,6 +11,7 @@
             </div>
             <div class="card-body p-4">
                 <!-- Location preference -->
+                {% if location_allowed %}
                 <div id="locationPreference" class="mb-4">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="captureLocation" checked>
@@ -19,6 +20,12 @@
                         </label>
                     </div>
                 </div>
+                {% else %}
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Location tracking is disabled for your account by administrator.
+                </div>
+                {% endif %}
 
                 <div id="step1" class="step-container">
                     <div class="text-center mb-4">
@@ -89,12 +96,14 @@
 let frontStream, rearStream;
 let checkoutFrontImageData, checkoutRearImageData;
 let locationData = {};
-let captureLocationEnabled = true;
+let captureLocationEnabled = {{ 'true' if location_allowed else 'false' }};
 
-// Check location preference
-document.getElementById('captureLocation').addEventListener('change', function() {
+// Check location preference - only if admin allows
+{% if location_allowed %}
+document.getElementById('captureLocation')?.addEventListener('change', function() {
     captureLocationEnabled = this.checked;
 });
+{% endif %}
 
 // Step 1: Front Camera
 async function startFrontCamera() {

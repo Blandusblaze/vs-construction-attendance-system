@@ -38,6 +38,7 @@ def init_db():
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
+            location_enabled INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -78,20 +79,29 @@ def init_db():
 
 # User class for Flask-Login
 class User(UserMixin):
-    def __init__(self, id, username, email, role):
+    def __init__(self, id, username, email, role, location_enabled=1):
         self.id = id
         self.username = username
         self.email = email
         self.role = role
+        self.location_enabled = location_enabled
 
 @login_manager.user_loader
 def load_user(user_id):
     conn = get_db()
     user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.close()
+
     if user:
-        return User(user['id'], user['username'], user['email'], user['role'])
+        return User(
+            user['id'],
+            user['username'],
+            user['email'],
+            user['role'],
+            user['location_enabled']  # <-- fixed
+        )
     return None
+
 
 # Admin required decorator
 def admin_required(f):
@@ -147,7 +157,7 @@ def logout():
 @admin_required
 def admin_dashboard():
     conn = get_db()
-    users = conn.execute('SELECT id, username, email, role, created_at FROM users').fetchall()
+    users = conn.execute('SELECT id, username, email, role, location_enabled, created_at FROM users').fetchall()
     attendance = conn.execute('''
         SELECT a.*, u.username 
         FROM attendance a 
@@ -166,6 +176,7 @@ def add_user():
     email = request.form.get('email')
     password = request.form.get('password')
     role = request.form.get('role', 'user')
+    location_enabled = 1 if request.form.get('location_enabled') == 'on' else 0
     
     if not username or not email or not password:
         flash('All fields are required', 'danger')
@@ -175,16 +186,36 @@ def add_user():
     try:
         password_hash = generate_password_hash(password)
         conn.execute(
-            'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
-            (username, email, password_hash, role)
+            'INSERT INTO users (username, email, password_hash, role, location_enabled) VALUES (?, ?, ?, ?, ?)',
+            (username, email, password_hash, role, location_enabled)
         )
         conn.commit()
-        flash(f'User {username} added successfully', 'success')
+        location_status = "with" if location_enabled else "without"
+        flash(f'User {username} added successfully {location_status} location tracking', 'success')
     except sqlite3.IntegrityError:
         flash('Username or email already exists', 'danger')
     finally:
         conn.close()
     
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/toggle_location/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def toggle_location(user_id):
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    
+    if user:
+        new_status = 0 if user['location_enabled'] else 1
+        conn.execute('UPDATE users SET location_enabled = ? WHERE id = ?', (new_status, user_id))
+        conn.commit()
+        status_text = "enabled" if new_status else "disabled"
+        flash(f'Location tracking {status_text} for {user["username"]}', 'success')
+    else:
+        flash('User not found', 'danger')
+    
+    conn.close()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/user/dashboard')
@@ -220,7 +251,8 @@ def checkin_page():
         flash('You are already checked in. Please check out first.', 'warning')
         return redirect(url_for('user_dashboard'))
     
-    return render_template('checkin.html')
+    # Pass location permission to template
+    return render_template('checkin.html', location_allowed=current_user.location_enabled)
 
 @app.route('/user/checkout')
 @login_required
@@ -237,7 +269,8 @@ def checkout_page():
         flash('You need to check in first.', 'warning')
         return redirect(url_for('user_dashboard'))
     
-    return render_template('checkout.html')
+    # Pass location permission to template
+    return render_template('checkout.html', location_allowed=current_user.location_enabled)
 
 @app.route('/api/checkin', methods=['POST'])
 @login_required

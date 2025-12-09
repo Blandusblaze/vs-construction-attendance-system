@@ -11,6 +11,7 @@
             </div>
             <div class="card-body p-4">
                 <!-- Location preference -->
+                {% if location_allowed %}
                 <div id="locationPreference" class="mb-4">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="captureLocation" checked>
@@ -19,6 +20,12 @@
                         </label>
                     </div>
                 </div>
+                {% else %}
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Location tracking is disabled for your account by administrator.
+                </div>
+                {% endif %}
 
                 <div id="step1" class="step-container">
                     <div class="text-center mb-4">
@@ -63,6 +70,23 @@
                         <div class="spinner-border text-primary mt-3" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
+                        
+                        <!-- Location override option -->
+                        <div id="locationOverride" style="display: none;" class="mt-4">
+                            <div class="alert alert-warning">
+                                <p><strong>📍 Detected Location:</strong> <span id="detectedLocation">Checking...</span></p>
+                                <p class="small text-muted mb-2">Location might be inaccurate (network-based). You can override it below:</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Override with correct location (optional):</label>
+                                <input type="text" id="overrideCity" class="form-control" placeholder="e.g., Avadi, Chennai">
+                                <small class="text-muted">Leave empty to use detected location</small>
+                            </div>
+                            <button id="confirmLocationBtn" class="btn btn-success btn-lg">
+                                <i class="fas fa-check me-2"></i>Confirm & Continue
+                            </button>
+                        </div>
+                        
                         <div id="locationFallback" style="display: none;" class="mt-4">
                             <div class="alert alert-warning">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
@@ -105,12 +129,14 @@
 let frontStream, rearStream;
 let frontImageData, rearImageData;
 let locationData = {};
-let captureLocationEnabled = true;
+let captureLocationEnabled = {{ 'true' if location_allowed else 'false' }};
 
-// Check location preference
-document.getElementById('captureLocation').addEventListener('change', function() {
+// Check location preference - only if admin allows
+{% if location_allowed %}
+document.getElementById('captureLocation')?.addEventListener('change', function() {
     captureLocationEnabled = this.checked;
 });
+{% endif %}
 
 // Step 1: Front Camera
 async function startFrontCamera() {
@@ -218,8 +244,13 @@ function getLocation() {
             // Get city name from coordinates
             await getCityName();
             
-            // Submit check-in
-            submitCheckin();
+            // Show location override option if accuracy is poor
+            if (position.coords.accuracy > 500) {
+                showLocationOverride();
+            } else {
+                // Good accuracy, proceed directly
+                submitCheckin();
+            }
         },
         function(error) {
             console.error('Geolocation error:', error.code, error.message);
@@ -334,6 +365,24 @@ function showLocationFallback(message) {
     document.querySelector('#step3 p.text-muted').textContent = message;
     document.getElementById('locationFallback').style.display = 'block';
 }
+
+function showLocationOverride() {
+    document.querySelector('#step3 .spinner-border').style.display = 'none';
+    document.getElementById('detectedLocation').textContent = locationData.city + ' (' + locationData.latitude.toFixed(4) + ', ' + locationData.longitude.toFixed(4) + ')';
+    document.getElementById('locationOverride').style.display = 'block';
+}
+
+// Confirm location with optional override
+document.getElementById('confirmLocationBtn')?.addEventListener('click', function() {
+    const overrideCity = document.getElementById('overrideCity').value.trim();
+    
+    if (overrideCity) {
+        locationData.city = overrideCity + ' (User corrected)';
+        locationData.full_address = overrideCity + ' - Corrected from: ' + locationData.full_address;
+    }
+    
+    submitCheckin();
+});
 
 // Manual location submission
 document.getElementById('submitManualBtn')?.addEventListener('click', function() {
