@@ -12,14 +12,80 @@
 </div>
 
 <div class="row mb-3">
-    <div class="col-12">
+    <div class="col-md-8">
         <div class="btn-group" role="group">
-            <a href="{{ url_for('export_report') }}" class="btn btn-success">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#exportModal">
                 <i class="fas fa-file-excel me-2"></i>Export to Excel
-            </a>
-            <button type="button" class="btn btn-danger" onclick="confirmDeleteAll()">
+            </button>
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
                 <i class="fas fa-trash-alt me-2"></i>Delete All Records
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-file-excel me-2"></i>Export Attendance Report</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('export_report') }}" method="GET">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" class="form-control" name="start_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">End Date</label>
+                        <input type="date" class="form-control" name="end_date" required>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Report will include all records between these dates.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-download me-2"></i>Download Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Delete All Records</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('delete_all_records') }}" method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <strong>⚠️ WARNING!</strong><br>
+                        This will permanently delete ALL attendance records and images.
+                        This action cannot be undone!
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Enter Admin Password to Confirm</label>
+                        <input type="password" class="form-control" name="admin_password" 
+                               placeholder="Enter your password" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt me-2"></i>Confirm Delete All
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -170,15 +236,6 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if record.full_address %}
-                                <small>{{ record.full_address }}</small>
-                                {% elif record.city %}
-                                <span class="badge bg-info">{{ record.city }}</span>
-                                {% else %}
-                                <span class="text-muted">Not captured</span>
-                                {% endif %}
-                            </td>
-                            <td>
                                 {% if record.checkout_latitude and record.checkout_longitude and record.checkout_latitude != 0 %}
                                 <a href="https://www.google.com/maps?q={{ record.checkout_latitude }},{{ record.checkout_longitude }}" target="_blank" class="text-decoration-none">
                                     <i class="fas fa-map-marker-alt text-danger"></i>
@@ -231,18 +288,4 @@
         </div>
     </div>
 </div>
-
-<!-- Hidden form for delete all -->
-<form id="deleteAllForm" method="POST" action="{{ url_for('delete_all_records') }}" style="display: none;">
-</form>
-
-<script>
-function confirmDeleteAll() {
-    if (confirm('⚠️ WARNING: This will permanently delete ALL attendance records and images. This action cannot be undone!\n\nAre you absolutely sure?')) {
-        if (confirm('Final confirmation: Delete all records?')) {
-            document.getElementById('deleteAllForm').submit();
-        }
-    }
-}
-</script>
 {% endblock %}

@@ -2,13 +2,17 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 from PIL import Image
 import os
 import sqlite3
 import base64
 from functools import wraps
 import io
+import pytz
+
+# Set timezone to IST
+IST = pytz.timezone('Asia/Kolkata')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
@@ -98,7 +102,7 @@ def load_user(user_id):
             user['username'],
             user['email'],
             user['role'],
-            user['location_enabled']  # <-- fixed
+            user['location_enabled']
         )
     return None
 
@@ -282,10 +286,13 @@ def api_checkin():
     rear_image = data.get('rear_image')
     latitude = data.get('latitude')
     longitude = data.get('longitude')
-    city = data.get('city', 'Unknown')
-    full_address = data.get('full_address', '')
+    city = data.get('city', 'Location not captured')
+    full_address = data.get('full_address', 'Location not captured')
     
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # Use IST timezone
+    timestamp = datetime.now(IST).strftime('%Y%m%d_%H%M%S')
+    checkin_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
+    
     front_filename = f"checkin_front_{current_user.id}_{timestamp}.jpg"
     rear_filename = f"checkin_rear_{current_user.id}_{timestamp}.jpg"
     
@@ -312,9 +319,9 @@ def api_checkin():
     # Save to database
     conn = get_db()
     conn.execute('''
-        INSERT INTO attendance (user_id, front_image_path, rear_image_path, checkin_latitude, checkin_longitude, city, full_address)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (current_user.id, front_filename, rear_filename, latitude, longitude, city, full_address))
+        INSERT INTO attendance (user_id, front_image_path, rear_image_path, checkin_latitude, checkin_longitude, city, full_address, check_in_time)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (current_user.id, front_filename, rear_filename, latitude, longitude, city, full_address, checkin_time))
     conn.commit()
     conn.close()
     
@@ -330,10 +337,12 @@ def api_checkout():
     checkout_rear_image = data.get('checkout_rear_image')
     checkout_latitude = data.get('checkout_latitude')
     checkout_longitude = data.get('checkout_longitude')
-    checkout_city = data.get('checkout_city', 'Unknown')
-    checkout_full_address = data.get('checkout_full_address', '')
+    checkout_city = data.get('checkout_city', 'Location not captured')
+    checkout_full_address = data.get('checkout_full_address', 'Location not captured')
     
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # Use IST timezone
+    timestamp = datetime.now(IST).strftime('%Y%m%d_%H%M%S')
+    checkout_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
     checkout_front_filename = None
     checkout_rear_filename = None
     
@@ -358,7 +367,7 @@ def api_checkout():
     conn = get_db()
     conn.execute('''
         UPDATE attendance 
-        SET check_out_time = CURRENT_TIMESTAMP, 
+        SET check_out_time = ?, 
             status = 'checked_out',
             checkout_front_image_path = ?,
             checkout_rear_image_path = ?,
@@ -367,7 +376,7 @@ def api_checkout():
             checkout_city = ?,
             checkout_full_address = ?
         WHERE user_id = ? AND status = 'checked_in'
-    ''', (checkout_front_filename, checkout_rear_filename, checkout_latitude, checkout_longitude, 
+    ''', (checkout_time, checkout_front_filename, checkout_rear_filename, checkout_latitude, checkout_longitude, 
           checkout_city, checkout_full_address, current_user.id))
     conn.commit()
     conn.close()
@@ -389,8 +398,18 @@ def create_thumbnail(image_path, thumb_filename, size=(150, 150)):
 @login_required
 @admin_required
 def delete_all_records():
+    admin_password = request.form.get('admin_password')
+    
+    # Verify admin password
+    conn = get_db()
+    admin = conn.execute('SELECT * FROM users WHERE id = ?', (current_user.id,)).fetchone()
+    
+    if not admin or not check_password_hash(admin['password_hash'], admin_password):
+        conn.close()
+        flash('Invalid password. Delete operation cancelled.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
     try:
-        conn = get_db()
         # Delete all attendance records
         conn.execute('DELETE FROM attendance')
         conn.commit()
@@ -416,6 +435,13 @@ def delete_all_records():
 @login_required
 @admin_required
 def export_report():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    if not start_date or not end_date:
+        flash('Please provide start and end dates', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
     try:
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
@@ -438,7 +464,7 @@ def export_report():
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center', vertical='center')
         
-        # Get data
+        # Get data with date filter
         conn = get_db()
         records = conn.execute('''
             SELECT u.username, a.check_in_time, a.check_out_time, a.city, 
@@ -446,8 +472,9 @@ def export_report():
                    a.checkout_latitude, a.checkout_longitude
             FROM attendance a
             JOIN users u ON a.user_id = u.id
+            WHERE DATE(a.check_in_time) BETWEEN ? AND ?
             ORDER BY a.check_in_time DESC
-        ''').fetchall()
+        ''', (start_date, end_date)).fetchall()
         conn.close()
         
         # Add data
@@ -462,12 +489,12 @@ def export_report():
                 except:
                     pass
             
-            checkin_loc = record['city'] or 'N/A'
-            if record['checkin_latitude'] and record['checkin_longitude']:
+            checkin_loc = record['city'] or 'Not captured'
+            if record['checkin_latitude'] and record['checkin_longitude'] and record['checkin_latitude'] != 0:
                 checkin_loc += f" ({record['checkin_latitude']:.4f}, {record['checkin_longitude']:.4f})"
             
-            checkout_loc = record['checkout_city'] or 'N/A'
-            if record['checkout_latitude'] and record['checkout_longitude']:
+            checkout_loc = record['checkout_city'] or 'Not captured'
+            if record['checkout_latitude'] and record['checkout_longitude'] and record['checkout_latitude'] != 0:
                 checkout_loc += f" ({record['checkout_latitude']:.4f}, {record['checkout_longitude']:.4f})"
             
             ws.append([
@@ -498,8 +525,7 @@ def export_report():
         wb.save(output)
         output.seek(0)
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'attendance_report_{timestamp}.xlsx'
+        filename = f'attendance_report_{start_date}_to_{end_date}.xlsx'
         
         return send_file(
             output,
