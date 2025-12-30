@@ -73,10 +73,10 @@ def init_db():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
-        admin_hash = generate_password_hash('admin123')
+        admin_hash = generate_password_hash('admin@vsconstruction2025!')
         cursor.execute(
             "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-            ('admin', 'admin@attendance.com', admin_hash, 'admin')
+            ('admin', 'admin@vscattendance.com', admin_hash, 'admin')
         )
         conn.commit()
     conn.close()
