@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-
+<!--checkin.html-->
 {% block title %}Check In{% endblock %}
 
 {% block content %}
@@ -10,23 +10,6 @@
                 <h5 class="mb-0"><i class="fas fa-camera me-2"></i>Check In Process</h5>
             </div>
             <div class="card-body p-4">
-                <!-- Location preference -->
-                {% if location_allowed %}
-                <div id="locationPreference" class="mb-4">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="captureLocation" checked>
-                        <label class="form-check-label" for="captureLocation">
-                            <i class="fas fa-map-marker-alt me-1"></i>Capture my location
-                        </label>
-                    </div>
-                </div>
-                {% else %}
-                <div class="alert alert-info mb-4">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Location tracking is disabled for your account by administrator.
-                </div>
-                {% endif %}
-
                 <div id="step1" class="step-container">
                     <div class="text-center mb-4">
                         <h4>Step 1: Front Camera</h4>
@@ -71,22 +54,6 @@
                             <span class="visually-hidden">Loading...</span>
                         </div>
                         
-                        <!-- Location override option -->
-                        <div id="locationOverride" style="display: none;" class="mt-4">
-                            <div class="alert alert-warning">
-                                <p><strong>📍 Detected Location:</strong> <span id="detectedLocation">Checking...</span></p>
-                                <p class="small text-muted mb-2">Location might be inaccurate (network-based). You can override it below:</p>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Override with correct location (optional):</label>
-                                <input type="text" id="overrideCity" class="form-control" placeholder="e.g., Avadi, Chennai">
-                                <small class="text-muted">Leave empty to use detected location</small>
-                            </div>
-                            <button id="confirmLocationBtn" class="btn btn-success btn-lg">
-                                <i class="fas fa-check me-2"></i>Confirm & Continue
-                            </button>
-                        </div>
-                        
                         <div id="locationFallback" style="display: none;" class="mt-4">
                             <div class="alert alert-warning">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
@@ -129,14 +96,7 @@
 let frontStream, rearStream;
 let frontImageData, rearImageData;
 let locationData = {};
-let captureLocationEnabled = {{ 'true' if location_allowed else 'false' }};
-
-// Check location preference - only if admin allows
-{% if location_allowed %}
-document.getElementById('captureLocation')?.addEventListener('change', function() {
-    captureLocationEnabled = this.checked;
-});
-{% endif %}
+let isSubmitting = false;
 
 // Step 1: Front Camera
 async function startFrontCamera() {
@@ -151,6 +111,8 @@ async function startFrontCamera() {
 }
 
 document.getElementById('captureFrontBtn').addEventListener('click', function() {
+    if (isSubmitting) return;
+    
     const video = document.getElementById('frontVideo');
     const canvas = document.getElementById('frontCanvas');
     const context = canvas.getContext('2d');
@@ -191,6 +153,8 @@ async function startRearCamera() {
 }
 
 document.getElementById('captureRearBtn').addEventListener('click', function() {
+    if (isSubmitting) return;
+    
     const video = document.getElementById('rearVideo');
     const canvas = document.getElementById('rearCanvas');
     const context = canvas.getContext('2d');
@@ -206,18 +170,8 @@ document.getElementById('captureRearBtn').addEventListener('click', function() {
     
     // Move to step 3
     document.getElementById('step2').style.display = 'none';
-    
-    if (captureLocationEnabled) {
-        document.getElementById('step3').style.display = 'block';
-        getLocation();
-    } else {
-        // Skip location capture
-        locationData.latitude = null;
-        locationData.longitude = null;
-        locationData.city = 'Location not captured';
-        locationData.full_address = 'Location not captured';
-        submitCheckin();
-    }
+    document.getElementById('step3').style.display = 'block';
+    getLocation();
 });
 
 // Step 3: Get Location
@@ -227,11 +181,21 @@ function getLocation() {
         return;
     }
     
+    // Check if running on localhost - geolocation may not work on HTTP
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isHTTP = window.location.protocol === 'http:';
+    
+    if (isLocalhost && isHTTP) {
+        console.warn('⚠️ Running on HTTP localhost - geolocation may not work properly');
+    }
+    
     const options = {
-        enableHighAccuracy: true, // Changed to TRUE for actual GPS
-        timeout: 15000, // Increased to 15 seconds
-        maximumAge: 0 // Don't use cached location
+        enableHighAccuracy: true,
+        timeout: 30000, // Increased to 30 seconds for localhost
+        maximumAge: 0
     };
+    
+    console.log('📍 Requesting geolocation...');
     
     navigator.geolocation.getCurrentPosition(
         async function(position) {
@@ -241,34 +205,31 @@ function getLocation() {
             console.log('✓ Location captured:', locationData.latitude, locationData.longitude);
             console.log('Accuracy:', position.coords.accuracy, 'meters');
             
-            // Get city name from coordinates
             await getCityName();
-            
-            // Show location override option if accuracy is poor
-            if (position.coords.accuracy > 500) {
-                showLocationOverride();
-            } else {
-                // Good accuracy, proceed directly
-                submitCheckin();
-            }
+            submitCheckin();
         },
         function(error) {
-            console.error('Geolocation error:', error.code, error.message);
+            console.error('❌ Geolocation error:', error.code, error.message);
             
-            let errorMsg = 'Location access failed';
+            let errorMsg = 'Location access failed. ';
             
             switch(error.code) {
                 case error.PERMISSION_DENIED:
-                    errorMsg = 'Location permission was denied. Please allow location access.';
+                    errorMsg += 'Permission denied. Please allow location access in browser settings.';
+                    console.log('💡 Tip: Check browser permissions for this site');
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    errorMsg = 'Location information is unavailable. Please try again or enter manually.';
+                    errorMsg += 'Location information unavailable.';
+                    if (isLocalhost && isHTTP) {
+                        errorMsg += ' (HTTP on localhost may have limited geolocation support)';
+                    }
                     break;
                 case error.TIMEOUT:
-                    errorMsg = 'Location request timed out. Please try again or enter manually.';
+                    errorMsg += 'Location request timed out.';
                     break;
             }
             
+            errorMsg += ' Please enter manually.';
             showLocationFallback(errorMsg);
         },
         options
@@ -276,10 +237,7 @@ function getLocation() {
 }
 
 async function getCityName() {
-    // IMPORTANT: Use ONLY coordinates-based geocoding (not IP location)
-    
     try {
-        // Try OpenStreetMap first - more accurate for Indian locations
         const osmResponse = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${locationData.latitude}&lon=${locationData.longitude}&format=json&addressdetails=1`,
             {
@@ -291,9 +249,6 @@ async function getCityName() {
         
         if (osmResponse.ok) {
             const osmData = await osmResponse.json();
-            console.log('OSM Full Data:', osmData);
-            
-            // Get most specific location - prioritize neighborhood/suburb over city
             const addr = osmData.address;
             locationData.city = addr.neighbourhood 
                 || addr.suburb 
@@ -306,7 +261,6 @@ async function getCityName() {
                 || addr.state
                 || 'Location captured';
             
-            // Build full address with all available details
             const addressParts = [
                 addr.road,
                 addr.neighbourhood || addr.suburb,
@@ -317,16 +271,12 @@ async function getCityName() {
             ].filter(Boolean);
             
             locationData.full_address = addressParts.join(', ');
-            
-            console.log('✓ Location from OSM:', locationData.city);
-            console.log('Full address:', locationData.full_address);
             return;
         }
     } catch (error) {
         console.log('OpenStreetMap failed, trying BigDataCloud...', error);
     }
     
-    // Fallback to BigDataCloud
     try {
         const bdcResponse = await fetch(
             `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${locationData.latitude}&longitude=${locationData.longitude}&localityLanguage=en`
@@ -334,28 +284,20 @@ async function getCityName() {
         
         if (bdcResponse.ok) {
             const bdcData = await bdcResponse.json();
-            console.log('BDC Full Data:', bdcData);
-            
-            // Get detailed location info
             locationData.city = bdcData.locality 
                 || bdcData.localityInfo?.administrative?.[3]?.name
                 || bdcData.city 
                 || bdcData.principalSubdivision 
                 || 'Location captured';
             
-            // Build full address
             const addressComponents = bdcData.localityInfo?.administrative || [];
             locationData.full_address = addressComponents.map(a => a.name).join(', ') || locationData.city;
-            
-            console.log('✓ Location from BDC:', locationData.city);
-            console.log('Full address:', locationData.full_address);
             return;
         }
     } catch (error) {
         console.log('BigDataCloud failed:', error);
     }
     
-    // Final fallback
     locationData.city = 'Location captured (coordinates only)';
     locationData.full_address = `Lat: ${locationData.latitude}, Lon: ${locationData.longitude}`;
 }
@@ -366,25 +308,6 @@ function showLocationFallback(message) {
     document.getElementById('locationFallback').style.display = 'block';
 }
 
-function showLocationOverride() {
-    document.querySelector('#step3 .spinner-border').style.display = 'none';
-    document.getElementById('detectedLocation').textContent = locationData.city + ' (' + locationData.latitude.toFixed(4) + ', ' + locationData.longitude.toFixed(4) + ')';
-    document.getElementById('locationOverride').style.display = 'block';
-}
-
-// Confirm location with optional override
-document.getElementById('confirmLocationBtn')?.addEventListener('click', function() {
-    const overrideCity = document.getElementById('overrideCity').value.trim();
-    
-    if (overrideCity) {
-        locationData.city = overrideCity + ' (User corrected)';
-        locationData.full_address = overrideCity + ' - Corrected from: ' + locationData.full_address;
-    }
-    
-    submitCheckin();
-});
-
-// Manual location submission
 document.getElementById('submitManualBtn')?.addEventListener('click', function() {
     const manualCity = document.getElementById('manualCity').value.trim();
     
@@ -395,12 +318,12 @@ document.getElementById('submitManualBtn')?.addEventListener('click', function()
     
     locationData.latitude = 0;
     locationData.longitude = 0;
-    locationData.city = manualCity + ' (Manual entry)';
+    locationData.city = manualCity;
+    locationData.full_address = manualCity + ' (Manual entry)';
     
     submitCheckin();
 });
 
-// Retry location
 document.getElementById('retryLocationBtn')?.addEventListener('click', function() {
     document.getElementById('locationFallback').style.display = 'none';
     document.querySelector('#step3 .spinner-border').style.display = 'block';
@@ -410,6 +333,9 @@ document.getElementById('retryLocationBtn')?.addEventListener('click', function(
 
 // Step 4: Submit Check-in
 async function submitCheckin() {
+    if (isSubmitting) return;
+    isSubmitting = true;
+    
     try {
         const response = await fetch('/api/checkin', {
             method: 'POST',
@@ -431,11 +357,14 @@ async function submitCheckin() {
         if (data.success) {
             document.getElementById('step3').style.display = 'none';
             document.getElementById('step4').style.display = 'block';
+            isSubmitting = false;
         } else {
             showError('Check-in failed. Please try again.');
+            isSubmitting = false;
         }
     } catch (error) {
         showError('Network error. Please check your connection.');
+        isSubmitting = false;
     }
 }
 

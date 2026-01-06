@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-
+<!--user_dashboard.html-->
 {% block title %}User Dashboard{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
 </div>
 
 <div class="row mb-4">
-    <div class="col-md-6 mb-3">
+    <div class="col-md-4 mb-3">
         <div class="card text-center">
             <div class="card-body p-4">
                 <i class="fas fa-sign-in-alt fa-3x text-success mb-3"></i>
@@ -28,7 +28,7 @@
         </div>
     </div>
     
-    <div class="col-md-6 mb-3">
+    <div class="col-md-4 mb-3">
         <div class="card text-center">
             <div class="card-body p-4">
                 <i class="fas fa-sign-out-alt fa-3x text-danger mb-3"></i>
@@ -41,6 +41,84 @@
                 {% else %}
                 <p class="text-muted">Not checked in yet</p>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card text-center">
+            <div class="card-body p-4">
+                <i class="fas fa-images fa-3x text-warning mb-3"></i>
+                <h5>Additional Images</h5>
+                {% if current_checkin %}
+                {% set additional_count = 0 %}
+                {% if current_checkin.additional_image_1 %}{% set additional_count = additional_count + 1 %}{% endif %}
+                {% if current_checkin.additional_image_2 %}{% set additional_count = additional_count + 1 %}{% endif %}
+                {% if current_checkin.additional_image_3 %}{% set additional_count = additional_count + 1 %}{% endif %}
+                {% if current_checkin.additional_image_4 %}{% set additional_count = additional_count + 1 %}{% endif %}
+                <p class="text-muted">Add work photos</p>
+                <p class="badge bg-info">{{ additional_count }}/4 uploaded</p>
+                {% if additional_count < 4 %}
+                <button class="btn btn-warning btn-lg mt-2" data-bs-toggle="modal" data-bs-target="#addImagesModal">
+                    <i class="fas fa-camera me-2"></i>Add Images
+                </button>
+                {% else %}
+                <p class="text-success mt-2"><i class="fas fa-check-circle"></i> Maximum reached</p>
+                {% endif %}
+                {% else %}
+                <p class="text-muted">Check in first</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Images Modal -->
+<div class="modal fade" id="addImagesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-camera me-2"></i>Add Additional Images</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="captureSection" class="text-center">
+                    <p class="text-muted">Capture up to 4 additional work images</p>
+                    <p class="badge bg-info mb-3">Images captured: <span id="imageCount">0</span>/4</p>
+                    
+                    <div class="row g-2 mb-3" id="imagesPreview">
+                        <!-- Preview images will appear here -->
+                    </div>
+                    
+                    <div id="cameraSection" style="display: none;">
+                        <video id="cameraVideo" width="100%" height="auto" autoplay style="max-width: 500px; border-radius: 10px; border: 3px solid #ffc107; margin-bottom: 15px;"></video>
+                        <canvas id="cameraCanvas" style="display: none;"></canvas>
+                        <br>
+                        <button id="captureBtn" class="btn btn-warning btn-lg">
+                            <i class="fas fa-camera me-2"></i>Capture Image
+                        </button>
+                        <button id="stopCameraBtn" class="btn btn-outline-secondary btn-lg ms-2">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </button>
+                    </div>
+                    
+                    <div id="startSection">
+                        <button id="startCameraBtn" class="btn btn-warning btn-lg">
+                            <i class="fas fa-camera me-2"></i>Start Camera
+                        </button>
+                    </div>
+                    
+                    <div id="uploadStatus" class="alert alert-success mt-3" style="display: none;">
+                        <i class="fas fa-check-circle me-2"></i><span id="uploadMessage"></span>
+                    </div>
+                    
+                    <div id="errorStatus" class="alert alert-danger mt-3" style="display: none;">
+                        <i class="fas fa-exclamation-circle me-2"></i><span id="errorMessage"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -59,9 +137,10 @@
                             <th>Check In</th>
                             <th>Check Out</th>
                             <th>Duration</th>
-                            <th>Coordinates</th>
-                            <th>Location</th>
+                            <th>Check-in Location</th>
+                            <th>Check-out Location</th>
                             <th>Images</th>
+                            <th>Additional</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -72,22 +151,31 @@
                             <td>{{ record.check_out_time or 'N/A' }}</td>
                             <td>
                                 {% if record.check_out_time %}
-                                <!-- Duration calculation would go here -->
                                 Completed
                                 {% else %}
                                 Ongoing
                                 {% endif %}
                             </td>
                             <td>
-                                {% if record.latitude and record.longitude %}
-                                <a href="https://www.google.com/maps?q={{ record.latitude }},{{ record.longitude }}" target="_blank">
-                                    View Map
+                                {% if record.latitude and record.longitude and record.latitude != 0 %}
+                                <a href="https://www.google.com/maps?q={{ record.latitude }},{{ record.longitude }}" target="_blank" class="text-decoration-none">
+                                    <i class="fas fa-map-marker-alt text-success"></i>
+                                    {{ record.city or 'View Map' }}
                                 </a>
                                 {% else %}
-                                N/A
+                                {{ record.city or 'N/A' }}
                                 {% endif %}
                             </td>
-                            <td>{{ record.city or 'N/A' }}</td>
+                            <td>
+                                {% if record.checkout_latitude and record.checkout_longitude and record.checkout_latitude != 0 %}
+                                <a href="https://www.google.com/maps?q={{ record.checkout_latitude }},{{ record.checkout_longitude }}" target="_blank" class="text-decoration-none">
+                                    <i class="fas fa-map-marker-alt text-danger"></i>
+                                    {{ record.checkout_city or 'View Map' }}
+                                </a>
+                                {% else %}
+                                {{ record.checkout_city or 'N/A' }}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if record.front_image_path %}
                                 <a href="{{ url_for('static', filename='uploads/' + record.front_image_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
@@ -99,6 +187,22 @@
                                     <i class="fas fa-camera"></i>
                                 </a>
                                 {% endif %}
+                            </td>
+                            <td>
+                                {% set additional_count = 0 %}
+                                {% if record.additional_image_1 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                {% endif %}
+                                {% if record.additional_image_2 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                {% endif %}
+                                {% if record.additional_image_3 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                {% endif %}
+                                {% if record.additional_image_4 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                {% endif %}
+                                <span class="badge bg-info">{{ additional_count }}/4</span>
                             </td>
                             <td>
                                 {% if record.status == 'checked_in' %}
@@ -118,4 +222,170 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+let cameraStream;
+let capturedImages = [];
+let attendanceId = {{ current_checkin.id if current_checkin else 'null' }};
+let maxImages = 4;
+{% if current_checkin %}
+{% set additional_count = 0 %}
+{% if current_checkin.additional_image_1 %}{% set additional_count = additional_count + 1 %}{% endif %}
+{% if current_checkin.additional_image_2 %}{% set additional_count = additional_count + 1 %}{% endif %}
+{% if current_checkin.additional_image_3 %}{% set additional_count = additional_count + 1 %}{% endif %}
+{% if current_checkin.additional_image_4 %}{% set additional_count = additional_count + 1 %}{% endif %}
+let currentCount = {{ additional_count }};
+{% else %}
+let currentCount = 0;
+{% endif %}
+
+document.getElementById('startCameraBtn')?.addEventListener('click', async function() {
+    if (currentCount >= maxImages) {
+        showError('Maximum 4 images already uploaded');
+        return;
+    }
+    
+    document.getElementById('startSection').style.display = 'none';
+    document.getElementById('cameraSection').style.display = 'block';
+    
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' } 
+        });
+        document.getElementById('cameraVideo').srcObject = cameraStream;
+    } catch (error) {
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user' } 
+            });
+            document.getElementById('cameraVideo').srcObject = cameraStream;
+        } catch (err) {
+            showError('Camera access denied. Please allow camera permissions.');
+            stopCamera();
+        }
+    }
+});
+
+document.getElementById('captureBtn')?.addEventListener('click', function() {
+    if (capturedImages.length >= (maxImages - currentCount)) {
+        showError('Maximum images reached for this session');
+        return;
+    }
+    
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('cameraCanvas');
+    const context = canvas.getContext('2d');
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    
+    const imageData = canvas.toDataURL('image/jpeg');
+    capturedImages.push(imageData);
+    
+    updatePreview();
+    
+    // Upload immediately after capture
+    uploadImages();
+    
+    // Stop camera after capture
+    stopCamera();
+    
+    // Show start button again if not reached limit
+    if ((capturedImages.length + currentCount) < maxImages) {
+        document.getElementById('startSection').style.display = 'block';
+    }
+});
+
+document.getElementById('stopCameraBtn')?.addEventListener('click', function() {
+    stopCamera();
+    document.getElementById('startSection').style.display = 'block';
+});
+
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+    }
+    document.getElementById('cameraSection').style.display = 'none';
+}
+
+function updatePreview() {
+    const previewDiv = document.getElementById('imagesPreview');
+    previewDiv.innerHTML = '';
+    
+    capturedImages.forEach((img, idx) => {
+        const col = document.createElement('div');
+        col.className = 'col-3';
+        col.innerHTML = `
+            <div class="position-relative">
+                <img src="${img}" class="img-thumbnail" style="width: 100%; height: 120px; object-fit: cover;">
+                <span class="badge bg-success position-absolute top-0 end-0 m-1">${idx + 1}</span>
+            </div>
+        `;
+        previewDiv.appendChild(col);
+    });
+    
+    document.getElementById('imageCount').textContent = capturedImages.length + currentCount;
+}
+
+async function uploadImages() {
+    if (!attendanceId || capturedImages.length === 0) return;
+    
+    try {
+        const response = await fetch(`/api/add-images/${attendanceId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                additional_images: capturedImages
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccess(`${data.images_uploaded} image(s) uploaded successfully!`);
+            currentCount = data.total_additional_images;
+            capturedImages = [];
+            
+            // If reached max, close modal after 2 seconds
+            if (currentCount >= maxImages) {
+                setTimeout(() => {
+                    location.reload(); // Reload to update the UI
+                }, 2000);
+            }
+        } else {
+            showError('Failed to upload images. Please try again.');
+        }
+    } catch (error) {
+        showError('Network error. Please check your connection.');
+    }
+}
+
+function showSuccess(message) {
+    const successDiv = document.getElementById('uploadStatus');
+    document.getElementById('uploadMessage').textContent = message;
+    successDiv.style.display = 'block';
+    document.getElementById('errorStatus').style.display = 'none';
+    
+    setTimeout(() => {
+        successDiv.style.display = 'none';
+    }, 3000);
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('errorStatus');
+    document.getElementById('errorMessage').textContent = message;
+    errorDiv.style.display = 'block';
+    document.getElementById('uploadStatus').style.display = 'none';
+}
+
+// Reset modal when closed
+document.getElementById('addImagesModal')?.addEventListener('hidden.bs.modal', function() {
+    stopCamera();
+    document.getElementById('startSection').style.display = 'block';
+    document.getElementById('uploadStatus').style.display = 'none';
+    document.getElementById('errorStatus').style.display = 'none';
+});
+</script>
 {% endblock %}

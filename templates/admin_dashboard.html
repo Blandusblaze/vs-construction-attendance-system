@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-
+<!--admin_dashboard.html-->
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
@@ -206,6 +206,7 @@
                             <th>Check-in Location</th>
                             <th>Check-out Location</th>
                             <th>Check-in Images</th>
+                            <th>Additional Images</th>
                             <th>Check-out Images</th>
                             <th>Status</th>
                         </tr>
@@ -218,8 +219,6 @@
                             <td>{{ record.check_out_time or 'N/A' }}</td>
                             <td>
                                 {% if record.check_out_time %}
-                                {% set checkin = record.check_in_time %}
-                                {% set checkout = record.check_out_time %}
                                 <span class="badge bg-info">Completed</span>
                                 {% else %}
                                 <span class="badge bg-warning">Ongoing</span>
@@ -229,10 +228,14 @@
                                 {% if record.checkin_latitude and record.checkin_longitude and record.checkin_latitude != 0 %}
                                 <a href="https://www.google.com/maps?q={{ record.checkin_latitude }},{{ record.checkin_longitude }}" target="_blank" class="text-decoration-none">
                                     <i class="fas fa-map-marker-alt text-success"></i>
-                                    {{ "%.4f, %.4f"|format(record.checkin_latitude, record.checkin_longitude) }}
+                                    {{ record.city or "View Map" }}
                                 </a>
+                                <br><small class="text-muted">{{ record.full_address }}</small>
                                 {% else %}
-                                <span class="text-muted">Not captured</span>
+                                <span class="text-muted">{{ record.city or 'Not captured' }}</span>
+                                {% if record.full_address and record.full_address != record.city %}
+                                <br><small class="text-muted">{{ record.full_address }}</small>
+                                {% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -241,8 +244,12 @@
                                     <i class="fas fa-map-marker-alt text-danger"></i>
                                     {{ record.checkout_city or 'View Map' }}
                                 </a>
+                                <br><small class="text-muted">{{ record.checkout_full_address }}</small>
                                 {% else %}
                                 <span class="text-muted">{{ record.checkout_city or 'Not captured' }}</span>
+                                {% if record.checkout_full_address and record.checkout_full_address != record.checkout_city %}
+                                <br><small class="text-muted">{{ record.checkout_full_address }}</small>
+                                {% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -257,6 +264,42 @@
                                     <img src="{{ url_for('static', filename='uploads/thumb_' + record.rear_image_path) }}" 
                                          alt="Rear" class="img-thumbnail" style="max-width: 50px; cursor: pointer;">
                                 </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set additional_count = 0 %}
+                                {% if record.additional_image_1 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                    <a href="{{ url_for('static', filename='uploads/' + record.additional_image_1) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='uploads/thumb_' + record.additional_image_1) }}" 
+                                             alt="Add 1" class="img-thumbnail" style="max-width: 40px; cursor: pointer;">
+                                    </a>
+                                {% endif %}
+                                {% if record.additional_image_2 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                    <a href="{{ url_for('static', filename='uploads/' + record.additional_image_2) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='uploads/thumb_' + record.additional_image_2) }}" 
+                                             alt="Add 2" class="img-thumbnail" style="max-width: 40px; cursor: pointer;">
+                                    </a>
+                                {% endif %}
+                                {% if record.additional_image_3 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                    <a href="{{ url_for('static', filename='uploads/' + record.additional_image_3) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='uploads/thumb_' + record.additional_image_3) }}" 
+                                             alt="Add 3" class="img-thumbnail" style="max-width: 40px; cursor: pointer;">
+                                    </a>
+                                {% endif %}
+                                {% if record.additional_image_4 %}
+                                    {% set additional_count = additional_count + 1 %}
+                                    <a href="{{ url_for('static', filename='uploads/' + record.additional_image_4) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='uploads/thumb_' + record.additional_image_4) }}" 
+                                             alt="Add 4" class="img-thumbnail" style="max-width: 40px; cursor: pointer;">
+                                    </a>
+                                {% endif %}
+                                {% if additional_count == 0 %}
+                                    <span class="text-muted">None</span>
+                                {% else %}
+                                    <br><small class="badge bg-info">{{ additional_count }}/4</small>
                                 {% endif %}
                             </td>
                             <td>

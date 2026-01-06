@@ -56,6 +56,10 @@ def init_db():
             rear_image_path TEXT,
             checkout_front_image_path TEXT,
             checkout_rear_image_path TEXT,
+            additional_image_1 TEXT,
+            additional_image_2 TEXT,
+            additional_image_3 TEXT,
+            additional_image_4 TEXT,
             checkin_latitude REAL,
             checkin_longitude REAL,
             checkout_latitude REAL,
@@ -68,6 +72,25 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
+    
+    # Add additional image columns if they don't exist (migration)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(attendance)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'additional_image_1' not in columns:
+            conn.execute('ALTER TABLE attendance ADD COLUMN additional_image_1 TEXT')
+        if 'additional_image_2' not in columns:
+            conn.execute('ALTER TABLE attendance ADD COLUMN additional_image_2 TEXT')
+        if 'additional_image_3' not in columns:
+            conn.execute('ALTER TABLE attendance ADD COLUMN additional_image_3 TEXT')
+        if 'additional_image_4' not in columns:
+            conn.execute('ALTER TABLE attendance ADD COLUMN additional_image_4 TEXT')
+        
+        conn.commit()
+    except Exception as e:
+        print(f"Migration error: {e}")
     
     # Create default admin if not exists
     cursor = conn.cursor()
@@ -318,14 +341,16 @@ def api_checkin():
     
     # Save to database
     conn = get_db()
-    conn.execute('''
+    cursor = conn.cursor()
+    cursor.execute('''
         INSERT INTO attendance (user_id, front_image_path, rear_image_path, checkin_latitude, checkin_longitude, city, full_address, check_in_time)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', (current_user.id, front_filename, rear_filename, latitude, longitude, city, full_address, checkin_time))
+    attendance_id = cursor.lastrowid
     conn.commit()
     conn.close()
     
-    return jsonify({'success': True, 'message': 'Check-in successful!'})
+    return jsonify({'success': True, 'message': 'Check-in successful!', 'attendance_id': attendance_id})
 
 @app.route('/api/checkout', methods=['POST'])
 @login_required
@@ -382,6 +407,98 @@ def api_checkout():
     conn.close()
     
     return jsonify({'success': True, 'message': 'Check-out successful!'})
+
+@app.route('/api/add-images/<int:attendance_id>', methods=['POST'])
+@login_required
+def add_additional_images(attendance_id):
+    """Add additional images to an existing check-in"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'additional_images' not in data:
+            return jsonify({'success': False, 'error': 'No images provided'}), 400
+        
+        # Find the attendance record
+        conn = get_db()
+        attendance = conn.execute(
+            'SELECT * FROM attendance WHERE id = ? AND user_id = ? AND status = ?',
+            (attendance_id, current_user.id, 'checked_in')
+        ).fetchone()
+        
+        if not attendance:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Active check-in not found'}), 404
+        
+        # Check how many additional images already exist
+        existing_count = sum([
+            1 if attendance['additional_image_1'] else 0,
+            1 if attendance['additional_image_2'] else 0,
+            1 if attendance['additional_image_3'] else 0,
+            1 if attendance['additional_image_4'] else 0
+        ])
+        
+        if existing_count >= 4:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Maximum 4 additional images already uploaded'}), 400
+        
+        # Process and save new images
+        additional_images = data['additional_images']
+        uploaded_files = []
+        timestamp = datetime.now(IST).strftime('%Y%m%d_%H%M%S_%f')
+        
+        # Determine which slots to fill
+        slots_to_fill = []
+        if not attendance['additional_image_1']:
+            slots_to_fill.append('additional_image_1')
+        if not attendance['additional_image_2']:
+            slots_to_fill.append('additional_image_2')
+        if not attendance['additional_image_3']:
+            slots_to_fill.append('additional_image_3')
+        if not attendance['additional_image_4']:
+            slots_to_fill.append('additional_image_4')
+        
+        # Save images to the available slots
+        for idx, image_data in enumerate(additional_images[:len(slots_to_fill)]):
+            filename = f"additional_{current_user.id}_{attendance_id}_{timestamp}_{idx}.jpg"
+            
+            # Save image
+            image_data_clean = image_data.split(',')[1]
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            with open(image_path, 'wb') as f:
+                f.write(base64.b64decode(image_data_clean))
+            
+            # Create thumbnail
+            create_thumbnail(image_path, f"thumb_{filename}")
+            
+            uploaded_files.append((slots_to_fill[idx], filename))
+        
+        # Update database with new image paths
+        if uploaded_files:
+            update_parts = []
+            update_values = []
+            for slot, filename in uploaded_files:
+                update_parts.append(f"{slot} = ?")
+                update_values.append(filename)
+            
+            update_values.append(attendance_id)
+            conn.execute(
+                f"UPDATE attendance SET {', '.join(update_parts)} WHERE id = ?",
+                update_values
+            )
+            conn.commit()
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(uploaded_files)} image(s) uploaded successfully',
+            'images_uploaded': len(uploaded_files),
+            'total_additional_images': existing_count + len(uploaded_files)
+        })
+        
+    except Exception as e:
+        print(f"Error adding additional images: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Helper function to create thumbnails
 def create_thumbnail(image_path, thumb_filename, size=(150, 150)):
@@ -453,7 +570,7 @@ def export_report():
         
         # Headers
         headers = ['User', 'Check In', 'Check Out', 'Duration (hrs)', 'Check-in Location', 
-                   'Check-out Location', 'Status']
+                   'Check-out Location', 'Additional Images', 'Status']
         ws.append(headers)
         
         # Style headers
@@ -469,7 +586,8 @@ def export_report():
         records = conn.execute('''
             SELECT u.username, a.check_in_time, a.check_out_time, a.city, 
                    a.checkout_city, a.status, a.checkin_latitude, a.checkin_longitude,
-                   a.checkout_latitude, a.checkout_longitude
+                   a.checkout_latitude, a.checkout_longitude, a.full_address, a.checkout_full_address,
+                   a.additional_image_1, a.additional_image_2, a.additional_image_3, a.additional_image_4
             FROM attendance a
             JOIN users u ON a.user_id = u.id
             WHERE DATE(a.check_in_time) BETWEEN ? AND ?
@@ -490,12 +608,24 @@ def export_report():
                     pass
             
             checkin_loc = record['city'] or 'Not captured'
+            if record['full_address'] and record['full_address'] != record['city']:
+                checkin_loc = record['full_address']
             if record['checkin_latitude'] and record['checkin_longitude'] and record['checkin_latitude'] != 0:
                 checkin_loc += f" ({record['checkin_latitude']:.4f}, {record['checkin_longitude']:.4f})"
             
             checkout_loc = record['checkout_city'] or 'Not captured'
+            if record['checkout_full_address'] and record['checkout_full_address'] != record['checkout_city']:
+                checkout_loc = record['checkout_full_address']
             if record['checkout_latitude'] and record['checkout_longitude'] and record['checkout_latitude'] != 0:
                 checkout_loc += f" ({record['checkout_latitude']:.4f}, {record['checkout_longitude']:.4f})"
+            
+            # Count additional images
+            additional_count = sum([
+                1 if record['additional_image_1'] else 0,
+                1 if record['additional_image_2'] else 0,
+                1 if record['additional_image_3'] else 0,
+                1 if record['additional_image_4'] else 0
+            ])
             
             ws.append([
                 record['username'],
@@ -504,6 +634,7 @@ def export_report():
                 duration,
                 checkin_loc,
                 checkout_loc,
+                f"{additional_count}/4",
                 record['status']
             ])
         
